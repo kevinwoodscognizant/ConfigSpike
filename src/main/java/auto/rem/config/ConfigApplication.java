@@ -21,6 +21,7 @@ public class ConfigApplication {
 
 	@GetMapping("/password")
 	public String getPassword() {
+
 		return "not a config server password";
 	}
 }
