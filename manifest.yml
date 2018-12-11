@@ -1,5 +1,10 @@
 ---
 applications:
-- name: config-spike
-  memory: 768M
+- name: config-app
+#  host: cookie
   instances: 1
+  memory: 768M
+  services:
+  - config-server
+  env:
+    SPRING_PROFILES_ACTIVE: development
