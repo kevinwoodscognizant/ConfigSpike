@@ -1,0 +1,360 @@
+Group/SubGroup/Type	Complexity	Comment
+Group: ApplicationScope
+Sub Group: JSP	Complex++	JSP builds dynamic web pages by inserting java code in HTML pages (usually using <% %> syntax). This anti-pattern uses application scope variable inserting. The fix is to use a distributed cache.
+
+<\s*[\w]+\s*:\s*set\s+(?:[\S\s]*?)scope\s*=\s*application
+Group: SessionScope         
+SubGroup: HTTPSession 	Complex++	Servlet context instantiates objects which needs to be moved to redis. The attributes being tracked is setAttribute, removeAttribute, getAttributeNames
+
+(?:setAttribute|removeAttribute|getAttribute|getAttributeNames)\s*\(
+Group: ApplicationScope
+SubGroup: bean	Complex++	Ties scope of a single bean to the lifecycle of a ServletContext.  Use redis.
+<\s*bean\s+(?:[\S\s]*?)scope\s*="application"
+Group: ApplicationScope
+SubGroup: JSP_InstanceVariable	POTENTIAL ONE LINER YAAAA but probably not really	JSP uses the <%! %> syntax for variable declaration. This is thread unsafe.
+http://javaonlineguide.net/2014/06/is-jsp-thread-safe-by-default-how-to.html
+https://stackoverflow.com/questions/15155157/jsp-isthreadsafe-default
+
+Adding "<%@ page isThreadSafe="false" %>" to a .jsp file that uses JSP declaration will make the page thread safe and only send one request at a time. This will potentially cause performance issues and does not remove the anti-pattern from VSM detection. It is also up to the developer to ensure that access to shared objects are synchronized (like ServletContext or HttpSession) which is an anti-pattern itself. So, if all anti-patterns are remediated, this could be a one line fix.
+
+Single thread model is deprecated and not advised.
+
+(?:<%!\s*.*?;\s*%>)
+Group: ApplicationScope
+SubGroup: ServletContext	Complex++	ServletContext, ActionContext, ServletActionContext are classes that are instantiated in each instance for each virtual machine. They hold config information related to that instance. This information should be held in a centralized database instead.
+
+[\s\.\(,]ServletContext\s+(\w+)\s*[\),;=](?:\s*new\s+ServletContext\s*\()?
+[\s\.\(,]ActionContext\s+(\w+)\s*[\),;=](?:\s*new\s+ActionContext\s*\()?
+org\.apache\.struts2\.interceptor\.ApplicationAware
+[\s\.\(,]ServletActionContext\s+(\w+)\s*[\),;=](?:\s*new\s+ServletActionContext\s*\()?
+Group: ApplicationScope
+SubGroup: JSF_ApplicationScope	Complex++	Bean is created and destroyed dependent on the web application
+Possible solution is to store it in a cache, e.g redis
+
+@managedBean
+Group: ApplicationStartUp
+SubGroup: EJBStartUp	Complex+	@startup is used to eagerly initialize resources
+Potential fix is to remove @startup????? Can’t really test whether this will break the code
+
+@startup
+Group: ApplicationStartUp
+SubGroup: ServletStartUp	Complex+	Same
+
+@WebServlet[\s\S]*?loadOnStartup\s*=\s*\d+
+Group: ApplicationStartUp
+SubGroup: ServletContextListener	Complex+	Same
+
+@WebServletContextListener
+Group: ApplicationStartup
+SubGroup: ResourceAdapter	Complex+	Same
+
+\sstart\s*\(
+Group: ApplicationStartUp
+SubGroup: WebLogicStartup	Complex++	Add hooks to for listeners before and after application initializes.
+
+
+(preStart|postStart)\s*\(
+class\s+\w+\s+extends\s+(weblogic\.application\.)?ApplicationLifecycleListener
+Group: ApplicationStartUp
+SubGroup: GlassFishServerLifecycle	Complex+	Same
+Group: AppServerLibraries
+SubGroup: JBoss	Complex ∞	Changing libraries to not be application server specific will require complete refactor of developer’s logic
+
+LifecycleEvent\.STARTUP_EVENT
+Group: AppServerLibraries
+SubGroup: Tomcat	Complex ∞	Same
+Group: AppServerLibraries
+SubGroup: Websphere	Complex ∞	Same
+Group: AppServerLibraries
+SubGroup: Jetty	Complex ∞	Same
+Group:AppServerLibraries
+SubGroup: GlassFish	Complex ∞	Same
+Group: AppServerLibraries
+SubGroup: Weblogic	Complex ∞	Same
+Group:Batch
+SubGroup: JavaEE_Batch	Complex	Java batches are used to process large sets of data. The anti-pattern is that Java batch is not scalable and suggests to use another batch technology (like Spring cloud batch).
+
+<job\s
+Group: Batch
+SubGroup: SpringBatch	Complex	Same
+Group: Batch
+SubGroup: JobScheduler	Complex	Same
+Group: Database
+SubGroup: MS_Access_RDBMS	Complex++	MS Access lets users interact with an excel like database to visualize data. Use server based data stores instead.
+
+sun\.jdbc\.odbc\.JdbcOdbcDriver
+Group: Dependency
+SubGroup: DependentJARsLocal	Complex++	Local JAR files found. Isolate JAR files and explicitly declare.
+Group: DeprecatedAPI
+SubGroup: DeprecatedAPI	Complex ∞	The api that is deprecated is not the only switch, the logic also needs to be changed
+Group: DeprecatedAPI
+SubGroup: DeprecatedAnnotation	Complex++	Removing annotation may cause a change in the functionality in the code. Need to find a proper replacement for the actual annotation
+
+[\s\.\(,@]InitParam
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass	Single line	Switching linenumberInputStream for LineNumberReader
+
+[\s\.\(,]LineNumberInputStream
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass	Single line	Replace StringBuffterInputStream with StringReader
+
+[\s\.\(,]StringBufferInputStream
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass 	Complex++	No replacement for RMI (outdated)
+
+java\.rmi\.server\.(?:LogStream|Operation|RemoteStub)
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass 	Complex	Identity/IdentityScope/Principal/Signer functionality replaced with the following libraries:
+
+java.security.KeyStore 
+the java.security.cert package
+java.security.Principal
+
+java\.security\.(?:Identity|IdentityScope|Principal|Signer)
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass	Complex	Replaced by java.security.Policy. 
+java.security.Policy has a method:
+    public PermissionCollection getPermissions
+
+javax\.security\.auth\.Policy
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass	Complex++	Switching out org.omg.CORBA.DynamicImplementation will need a proper replacement. Which would also have to have similar implementation methods or the structure of the code will change
+
+org\.omg\.CORBA\.(?:DynamicImplementation|Principal|PrincipalHolder)
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass	Single line	org.xml.sax.HandlerBase replaced by org.xml.sax.helpers.DefaultHandler
+
+org.xml.sax.helpers.AttributeListImpl replaced by org.xml.sax.helpers.AttributesImpl 
+
+org.xml.sax.helpers.ParserFactory replaced by
+org.xml.sax.helpers.XMLReaderFactory
+
+org\.xml\.sax\.(?:HandlerBase|helpers\.AttributeListImpl|helpers\.ParserFactory)
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass	Single line	Switch DefaultLoaderRepository to getClassLoaderRepository
+
+javax\.management\.(?:loading\.)?DefaultLoaderRepository
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass	Complex++	Deprecated with no replacement
+
+javax\.accessibility\.AccessibleResourceBundle
+Group: DeprecatedAPI
+SubGroup: DeprecatedClass	Complex	javax.xml.soap.SOAPElementFactory is deprecated and replaced with javax.xml.soap.SOAPFactory. This is not a one to one replacement as the method names have changed.
+
+javax\.xml\.soap\.SOAPElementFactory
+Group: DeprecatedAPI
+SubGroup: DeprecatedException	Partial single line	replace java.rmi.RMISecurityException with java.lang.SecurityException
+
+No replacement for ServerRuntimeException
+
+java\.rmi\.((?:RMISecurityException|ServerRuntimeException)|\*)
+Group: DeprecatedAPI
+SubGroup: DeprecatedException	Partial single line	Replace java.rmi.server.SocketSecurityException with java.rmi.server.ExportException
+
+No replacement for SkeletonMismatchException or SkeletonNotFoundException
+
+java\.rmi\.server\.((?:SkeletonMismatchException|SkeletonNotFoundException|SocketSecurityException)|\*)
+Group: DeprecatedAPI
+SubGroup: DeprecatedInterface	Complex++	No replacement
+
+java\.rmi\.registry\.(?:RegistryHandler|\*)
+Group: DeprecatedAPI
+SubGroup: DeprecatedInterface	Complex++	No replacement
+
+java\.rmi\.server\.(?:(?:LoaderHandler|RemoteCall|ServerRef|Skeleton)|\*)
+Group: DeprecatedAPI
+SubGroup: DeprecatedInterface	Single line	Replace org.omg.CORBA.* with org.omg.DynamicAny.*
+
+org\.omg\.CORBA\.Dyn(?:Array|Any|Enum|Fixed|Sequence|Struct|Union|Value)
+Group: DeprecatedAPI
+SubGroup: DeprecatedInterface	Single line	Replace org.xml.sax.AttributeList with org.xml.sax.Attributes
+Replace org.xml.sax.DocumentHandler with org.xml.sax.ContentHandler
+Replace org.xml.sax.Parser with org.xml.sax.XMLReader
+
+org\.xml\.sax\.(?:AttributeList|DocumentHandler|Parser)
+Group: DeprecatedAPI
+SubGroup: DeprecatedInterface	Complex++	Java.security.Certificate does not have a replacement for its interface
+
+java\.security\.Certificate
+Group: DeprecatedAPI
+SubGroup: DeprecatedInterface	Complex++	Same
+
+javax.xml.bind.Validator
+Group: DeprecatedAPI
+SubGroup: DeprecatedInterface	Potential Single line	Switch weblogic.jdbc.vendor.oracle.OracleThinClob with oracle.jdbc.OracleClob
+
+weblogic\.jdbc\.vendor\.oracle\.OracleThinClob
+Group: DeprecatedAPI
+SubGroup: DeprecatedPackage	Complex++	Unclear
+
+javax\.xml\.registry\.(?:infomodel\.)?
+Group: DeprecatedAPI
+SubGroup: DeprecatedPackage	N/A	Not deprecated
+
+javax\.xml\.rpc\.(?:encoding|handler\.soap|handler|holders|server|soap|Call|Service|Stub|ServiceFactory|ServiceException)?
+Group: DeprecatedAPI
+SubGroup: DeprecatedPackage	Partial single line	Replace javax.enterprise.deploy.spi.distribute needs different params, cannot be done without understanding app logic  
+Replace getModuleDTDVersion with getDDBeanRootVersion()
+
+javax\.enterprise\.deploy\.
+Group: DistributedTransaction
+SubGroup: Others	Complex++	Dmitry said no
+
+org\.springframework\.transaction\.jta
+Group: DistributionTransaction
+SubGroup: EJB	Complex++	Same
+Group: DistrubutionTransaction
+SubGroup: JDBC	Complex++	Same
+Group: DistrubutionTransaction
+SubGroup: JMs	Complex++	Same
+Group: DistrubutionTransaction
+SubGroup: JPA	Complex++	Same
+Group: DistrubutionTransaction
+SubGroup: Transaction	Complex++	Same
+Group: EnvironmentVariables
+SubGroup: Read	Complex++	Avoid using local file system. Set up DB
+
+System\.getenv\s*\(
+Group: EnvironmentVariables
+SubGroup: Write	Complex++	Same
+Group: ESB
+SubGroup: ApacheCamel	Complex++	Migrate to Microservice
+org\.apache\.camel\.component\.jms\.JmsComponent
+Group: ESB
+SubGroup: ApacheServiceMix	Complex++	Same
+Group: ESB
+SubGroup: MuleESB	Complex++	Same
+Group: ESB
+SubGroup: IBM_WebSphereESB	Complex++	Same
+Group: ESB
+SubGroup: OracleESB	Complex++	Same
+Group: ESB
+SubGroup: TIBCO	Complex++	Same
+Group: ExternalInterface
+SubGroup: SMTPService	Complex++	Ensure that SMTP service can be accessed in the cloud
+Group: ExternalInterface
+SubGroup: SendGrid	Complex++	Same
+Group: ExternalInterface
+SubGroup: Twilio	Complex++	Same
+Group: ExternalInterface
+SubGroup: Paypal	Complex++	Same
+Group: ExternalInterface
+SubGroup: LDAPService	Complex++	Same
+Group: ExternalInterface
+SubGroup: IDP	Complex++	Same
+Group: ExternalInterface
+SubGroup: JCA	Complex++	Same
+Group: ExternalInterface
+SubGroup: WebService	Complex++	Same
+Group: ExternalInterface
+SubGroup: SOAPService	Complex++	Same
+Group: ExternalInterface
+SubGroup: WebServiceAnnotation	Complex++	Same
+Group: ExternalInterface
+SubGroup: SOAPServiceConsumer	Complex++	Same
+Group: ExternalInterface
+SubGroup: RESTService	Complex++	Same
+Group: ExternalInterface
+SubGroup: RESTServiceConsumer	Complex++	Same
+Group: FileSystem
+SubGroup: Read	Complex++	Avoid using local file system. Use a DB
+Group: FileSystem
+SubGroup: TempFiles	Complex++	Same
+Group: FileSystem
+SubGroup: TempFiles	Complex++	Same
+Group: InMemoryCaching
+SubGroup: ApacheJCS	Complex++	Use redis 
+Group: InMemoryCaching
+SubGroup: EHCache	Complex++	Same
+Group: InMemoryCaching
+SubGroup: GoogleGuavaCache	Complex++	Same
+Group: InMemoryCaching
+SubGroup: Hazelcast	Complex++	Same
+Group: InMemoryCaching
+SubGroup: HibernateSecondLevelCache	Complex++	Same
+Group: InMemoryCaching
+SubGroup: JBossCache	Complex++	Same
+Group: InMemoryCaching
+SubGroup: Spring	Complex++	Same
+Group: InMemoryDB
+SubGroup: ApacheIgnite	Complex++	Use distributed db
+Group: InMemoryDB
+SubGroup: H2Database	Complex++	Same
+Group: InMemoryDB
+SubGroup: Hsqldb	Complex++	Same
+Group: InMemoryDB
+SubGroup: Sqlite	Complex++	Same
+Group: InMemoryDB
+SubGroup: Polyhedra	Complex++	Same
+Group: InMemoryDB
+SubGroup: Raima	Complex++	Same
+Group: InMemoryDB
+SubGroup: Solid	Complex++	Same
+Group: InMemoryDB
+SubGroup: ApacheDerby	Complex++	Same
+Group: InMemoryDB
+SubGroup: GemFire	Complex++	Same
+Group: InMemoryDB
+SubGroup: Memcached	Complex++	Same
+Group: InMemoryDB
+SubGroup: NuoDB	Complex++	Same
+Group: InMemoryDB
+SubGroup: Redis	Complex++	Same
+Group: InMemoryDB
+SubGroup: VoltDB	Complex++	Same
+Group: Log
+SubGroup: Log4j	Done	Done
+Group: Log
+SubGroup: Log4j2	Done	Done
+Group: Log
+SubGroup: tiny log	Single Line	Remove all writers and replace it with consoleWriter
+Group: Log
+SubGroup: LogBack	Done	Done
+Group: Log
+SubGroup: JavaLoggingAPI	Single	Remove all writers and replace it with consoleWriter
+Group: Mail
+SubGroup: MailAPI	Complex++	Make sure mail API works in cloud environment
+Group: Mail
+SubGroup: MicrosoftExchangeMailService	Complex++	Same
+Group: Mail
+SubGroup: AmazonMailService	Complex++	Same
+Group: Mail
+SubGroup: GoogleMailService	Complex++	Same
+Group: Mail
+SubGroup: JBossMailService	Complex++	Same
+Group: Mail
+SubGroup: MailSession	Complex++	Same
+Group: MessageQueue
+SubGroup: ApacheActiveMQ	Complex++	Migrate to Cloud native AMQP brokers like RabbitMQ
+Group: MessageQueue
+SubGroup: ApacheQpid	Complex++	Same
+Group: MessageQueue
+SubGroup: OracleWeblogicOracleAQ	Complex++	Same
+Group: MessageQueue
+SubGroup: IBM_MQ	Complex++	Same
+Group: MessageQueue
+SubGroup: RabbitMQ	Complex++	Same
+Group: MessageQueue
+SubGroup: MicrosoftMessageQueuing	Complex++	Same
+Group: MessageQueue
+SubGroup: EJB_MessageDrivenBean	Complex++	Same
+Group: MessageQueue
+SubGroup: JavaxJMS	Complex++	Same
+Group: Misc
+SubGroup: SAX_Parser	Complex++	Don’t use SAX parser. Use DOM parsing?
+?? Why should we avoid SAX parsing ??
+
+org\.xml\.sax\.Parser[\s\.;]
+Group: Misc
+SubGroup: Transactional	Unknown	Disabled Anti-pattern
+Group: NativeCalls
+SubGroup: JNI	Complex++	Probably not auto remediable
+
+System\s*\.\s*loadLibrary
+Group: NativeCalls
+SubGroup: OS_Libraries	Complex++	Same
+Group: NativeCalls
+SubGroup: EnvironmentProcess	Complex++	Same
+Group: NativeCalls
+SubGroup: JavaNativeLibrary	Complex++	Same
+		
